@@ -1,0 +1,22 @@
+[project]
+name = "llm-twin"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Alireza",email = "arashidi1378@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.14,<4.0"
+dependencies = [
+    "fastapi (>=0.121.1,<0.122.0)",
+    "uvicorn[standard] (>=0.38.0,<0.39.0)",
+    "python-dotenv (>=1.2.1,<2.0.0)",
+    "pydantic (>=2.4,<3)",
+    "pydantic-settings (>=2.0,<3)",
+    "loguru (>=0.7.3,<0.8.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

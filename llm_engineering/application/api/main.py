@@ -1,0 +1,71 @@
+from fastapi import FastAPI, Depends, Query
+from pydantic import BaseModel
+from typing import List, Tuple
+
+from llm_engineering.application.settings import get_settings, Settings
+from llm_engineering.application.log_setup import setup_logging
+from llm_engineering.application.services.hello_service import HelloService
+from llm_engineering.application.services.rag_service import RAGService
+
+# Configure logging once
+setup_logging()
+
+app = FastAPI(title="LLM Handbook Ground-Up (Services + Logging + Mini RAG)")
+
+# --- Dependencies ---
+def settings_dep() -> Settings:
+    return get_settings()
+
+def hello_service_dep(settings: Settings = Depends(settings_dep)) -> HelloService:
+    return HelloService(settings=settings)
+
+# Build a single in-memory RAGService instance for the app lifetime
+_rag_service: RAGService | None = None
+def rag_service_dep(settings: Settings = Depends(settings_dep)) -> RAGService:
+    # global variable to hold the RAGService instance.
+    global _rag_service
+    # Lazy initialization; build on first request
+    if _rag_service is None:
+         # build the RAGService using the provided settings (builder pattern with classmethod)
+        _rag_service = RAGService.build(settings)
+    return _rag_service
+
+
+# --- Existing endpoints ---
+@app.get("/", tags=["meta"])
+def root(settings: Settings = Depends(settings_dep)):
+    return {
+        "ok": True,
+        "app_name": settings.app_name,
+        "environment": settings.app_env,
+        "debug": settings.debug,
+    }
+
+@app.get("/greet", tags=["demo"])
+def greet(
+    name: str | None = Query(default=None, description="Your name"),
+    svc: HelloService = Depends(hello_service_dep),
+):
+    return svc.greet(name)
+
+# --- New: RAG endpoints ---
+class IndexItem(BaseModel):
+    id: str
+    text: str
+
+@app.post("/index", tags=["rag"])
+def index(items: List[IndexItem], rag: RAGService = Depends(rag_service_dep)):
+    n = rag.index([(it.id, it.text) for it in items])
+    return {"indexed": n}
+
+@app.get("/search", tags=["rag"])
+def search(q: str, k: int = 5, rag: RAGService = Depends(rag_service_dep)):
+    """q = query string, k = top-k results"""
+    results = rag.search(q, k=k)
+    # results: List[(id, score, raw_text)]
+    
+    # returns a list of dicts containing id, score, and text, got from results which is a list of 3-element tuples
+    return [
+        {"id": doc_id, "score": round(score, 4), "text": raw}
+        for (doc_id, score, raw) in results
+    ]

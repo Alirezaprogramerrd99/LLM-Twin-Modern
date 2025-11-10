@@ -1,0 +1,54 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pkl
+*.pdb
+*.egg
+*.egg-info/
+*.log
+*.pot
+*.mo
+
+# ---- Virtual environments ----
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+
+# ---- Poetry ----
+poetry.lock
+
+# ---- VS Code ----
+.vscode/
+.history/
+.code-workspace
+
+# ---- Jupyter / Notebooks ----
+.ipynb_checkpoints/
+*.ipynb
+
+# ---- System files ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Environment files ----
+.env
+.env.local
+.env.*.local
+
+# ---- Build / cache ----
+build/
+dist/
+*.egg-info/
+*.spec
+
+# ---- Misc ----
+.idea/
+__MACOSX/
+logs/
+output/
+tmp/
