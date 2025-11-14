@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     app_name: str = "LLM Handbook Ground-Up - LLM Twin"
     app_env: str = "development"          # e.g., development / staging / production
     debug: bool = True
+    # -- Embedding model ---
+    embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+
 
     # --- Services (we’ll wire them later) ---
     mongo_uri: Optional[str] = None       # keep simple for now
@@ -20,6 +23,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",     # auto-load from your .env
         case_sensitive=False,  # .env keys can be upper/lower
+        extra="ignore"
     )
 
 
