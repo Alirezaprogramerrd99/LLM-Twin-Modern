@@ -10,8 +10,19 @@ class Settings(BaseSettings):
     app_name: str = "LLM Handbook Ground-Up - LLM Twin"
     app_env: str = "development"          # e.g., development / staging / production
     debug: bool = True
-    # -- Embedding model ---
+    
+    # Qdrant
+    qdrant_url: str | None = None
+    qdrant_api_key: str | None = None
+    # Default collection name
+    qdrant_collection: str = "documents"
+
+    # Embeddings (MiniLM-L6-v2 is 384)
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_dim: int = 384
+
+    # Switch: use qdrant if URL is set
+    use_qdrant: bool = False
 
 
     # --- Services (we’ll wire them later) ---
