@@ -16,7 +16,9 @@ dependencies = [
     "loguru (>=0.7.3,<0.8.0)",
     "sentence-transformers (>=5.1.2,<6.0.0)",
     "numpy (>=2.3.4,<3.0.0)",
-    "qdrant-client (>=1.15.1,<2.0.0)"
+    "qdrant-client (>=1.15.1,<2.0.0)",
+    "pymongo (>=4.15.4,<5.0.0)",
+    "openai (>=2.8.0,<3.0.0)"
 ]
 
 

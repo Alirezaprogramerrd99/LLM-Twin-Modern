@@ -23,6 +23,13 @@ class Settings(BaseSettings):
 
     # Switch: use qdrant if URL is set
     use_qdrant: bool = False
+    
+    
+    # --- MongoDB ---
+    mongo_uri: str | None = None
+    mongo_db_name: str = "llm_twin"
+    mongo_collection_docs: str = "documents"
+    use_mongo: bool = False
 
 
     # --- Services (we’ll wire them later) ---

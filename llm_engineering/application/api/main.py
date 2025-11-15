@@ -69,3 +69,12 @@ def search(q: str, k: int = 5, rag: RAGService = Depends(rag_service_dep)):
         {"id": doc_id, "score": round(score, 4), "text": raw}
         for (doc_id, score, raw) in results
     ]
+
+
+@app.get("/debug/mongo")
+def debug_mongo(rag: RAGService = Depends(rag_service_dep)):
+    if rag.doc_store is None:
+        return {"error": "Mongo store not enabled"}
+
+    docs = list(rag.doc_store.collection.find({}, {"_id": 1, "text": 1}))
+    return {"count": len(docs), "docs": docs}

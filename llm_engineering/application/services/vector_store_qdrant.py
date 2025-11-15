@@ -1,4 +1,3 @@
-# llm_engineering/application/services/vector_store_qdrant.py
 from __future__ import annotations
 from typing import List, Tuple
 from loguru import logger
@@ -38,7 +37,7 @@ class QdrantVectorStore:
             if isinstance(vec, np.ndarray):
                 vec = vec.astype("float32").tolist()
 
-            ids.append(internal_id)  # nteger ID for Qdrant
+            ids.append(internal_id)  # integer ID for Qdrant
             vectors.append(vec)
             payloads.append(
                 {
