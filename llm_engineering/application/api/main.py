@@ -98,3 +98,24 @@ def ask(
     if not result:
         raise HTTPException(status_code=500, detail="RAGService.ask returned no result")
     return result
+
+
+@app.get("/history", tags=["meta"])
+def history(
+    limit: int = Query(10, ge=1, le=100),
+    rag: RAGService = Depends(rag_service_dep),
+):
+    if rag.history_store is None:
+        raise HTTPException(status_code=503, detail="History store not configured (use_mongo=False?)")
+
+    docs = rag.history_store.recent(limit=limit)
+    # Convert ObjectId and datetime to strings for JSON
+    cleaned = []
+    for d in docs:
+        d = dict(d)
+        d["_id"] = str(d.get("_id", ""))
+        if "created_at" in d:
+            d["created_at"] = d["created_at"].isoformat()
+        cleaned.append(d)
+        
+    return {"count": len(cleaned), "items": cleaned}

@@ -59,3 +59,39 @@ class MongoDocumentStore:
         # return a dict mapping doc_id to text
         # doc.get("text", "") ensures we return an empty string if text is missing.
         return {str(doc["_id"]): doc.get("text", "") for doc in cursor}
+    
+class MongoInteractionStore:
+    """Store /ask interactions (question, answer, sources) in MongoDB."""
+
+    def __init__(self, uri: str, db_name: str, collection_name: str):
+        logger.info("Connecting to MongoDB (interactions) at {}", uri)
+        self.client = MongoClient(uri)
+        self.collection = self.client[db_name][collection_name]
+
+    def log_interaction(
+        self,
+        question: str,
+        answer: str,
+        hits: List[Tuple[str, float, str]],
+    ) -> None:
+        now = datetime.now(timezone.utc)
+        doc = {
+            "question": question,
+            "answer": answer,
+            "sources": [
+                {"id": doc_id, "score": score, "text": text}
+                for (doc_id, score, text) in hits
+            ],
+            "created_at": now,
+        }
+        self.collection.insert_one(doc)
+        logger.info("Logged interaction for question: {!r}", question[:80])
+
+    def recent(self, limit: int = 20) -> list[dict]:
+        cursor = (
+            self.collection
+            .find({}, {"question": 1, "answer": 1, "sources": 1, "created_at": 1})
+            .sort("created_at", -1)
+            .limit(limit)
+        )
+        return list(cursor)

@@ -7,8 +7,9 @@ from llm_engineering.application.settings import Settings
 from llm_engineering.application.services.st_embedder import STEmbedder
 from llm_engineering.application.services.vector_store_dense import DenseVectorStore
 from llm_engineering.application.services.vector_store_qdrant import QdrantVectorStore
-from llm_engineering.application.services.mongo_store import MongoDocumentStore
+from llm_engineering.application.services.mongo_store import MongoDocumentStore, MongoInteractionStore
 from llm_engineering.application.services.llm_client import LLMClient
+
 
 
 
@@ -22,6 +23,7 @@ class RAGService:
     
     # Optional MongoDB document store for metadata (not used in this example)
     doc_store: MongoDocumentStore | None = None
+    history_store: MongoInteractionStore | None = None
     
     # Optional LLM client for generation (not used in this example)
     llm: LLMClient | None = None
@@ -51,12 +53,20 @@ class RAGService:
         
         # Initialize MongoDocumentStore if mongo_uri is provided and use_mongo is True (in settings).
         doc_store: MongoDocumentStore | None = None
+        history_store: MongoInteractionStore | None = None
+        
         if settings.mongo_uri and settings.use_mongo:
             logger.info("Using MongoDB document store at {}", settings.mongo_uri)
             doc_store = MongoDocumentStore(
                 uri=settings.mongo_uri,
                 db_name=settings.mongo_db_name,
                 collection_name=settings.mongo_collection_docs,
+            )
+            
+            history_store = MongoInteractionStore(
+                uri=settings.mongo_uri,
+                db_name=settings.mongo_db_name,
+                collection_name=settings.mongo_collection_history,
             )
             
         # --- optional LLM client (Ollama) ---
@@ -67,6 +77,7 @@ class RAGService:
                    store=store, 
                    backend=backend, 
                    doc_store=doc_store if settings.use_mongo else None, 
+                   history_store=history_store if settings.use_mongo else None,
                    llm=llm_client)
 
     def index(self, items: List[Tuple[str, str]]) -> int:
@@ -148,6 +159,11 @@ class RAGService:
 
         # Generate answer using the LLM
         answer_text = self.llm.generate(prompt)
+        
+        
+         # log to Mongo if configured
+        if self.history_store is not None:
+            self.history_store.log_interaction(question, answer_text, hits)
 
         return {
             "question": question,
@@ -157,8 +173,3 @@ class RAGService:
                 for (doc_id, score, text) in hits
             ],
         }
-
-        
-
-                
-        

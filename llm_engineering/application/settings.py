@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     mongo_uri: str | None = None
     mongo_db_name: str = "llm_twin"
     mongo_collection_docs: str = "documents"
+    mongo_collection_history: str = "interactions"
     use_mongo: bool = False
 
 
