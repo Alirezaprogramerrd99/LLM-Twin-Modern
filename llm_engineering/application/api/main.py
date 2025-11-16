@@ -6,6 +6,7 @@ from llm_engineering.application.settings import get_settings, Settings
 from llm_engineering.application.log_setup import setup_logging
 from llm_engineering.application.services.hello_service import HelloService
 from llm_engineering.application.services.rag_service import RAGService
+from fastapi import HTTPException
 
 # Configure logging once
 setup_logging()
@@ -78,3 +79,22 @@ def debug_mongo(rag: RAGService = Depends(rag_service_dep)):
 
     docs = list(rag.doc_store.collection.find({}, {"_id": 1, "text": 1}))
     return {"count": len(docs), "docs": docs}
+
+
+#--- New: RAG ask endpoint ---
+# Full RAG step: retrieve + generate answer
+# Example: /ask?q=What+do+cats+eat?&k=3
+# Returns: { "answer": "...", "sources": [ ... ] }
+# tags=["rag"] puts this endpoint in the "rag" group in the Swagger UI
+# ... means that the parameter is required.
+@app.get("/ask", tags=["rag"])
+def ask(
+    q: str = Query(..., description="User question"),
+    k: int = Query(3, ge=1, le=10),
+    rag: RAGService = Depends(rag_service_dep),
+):
+    # calling the RAG pipeline's ask method
+    result = rag.ask(q, k=k)
+    if not result:
+        raise HTTPException(status_code=500, detail="RAGService.ask returned no result")
+    return result
