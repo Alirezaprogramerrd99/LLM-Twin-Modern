@@ -9,8 +9,7 @@ from llm_engineering.application.services.vector_store_dense import DenseVectorS
 from llm_engineering.application.services.vector_store_qdrant import QdrantVectorStore
 from llm_engineering.application.services.mongo_store import MongoDocumentStore, MongoInteractionStore
 from llm_engineering.application.services.llm_client import LLMClient
-
-
+from llm_engineering.application.services.chunker import ChunkerService
 
 
 @dataclass
@@ -27,6 +26,8 @@ class RAGService:
     
     # Optional LLM client for generation (not used in this example)
     llm: LLMClient | None = None
+    
+    chunker: ChunkerService | None = None
     
 
     @classmethod
@@ -71,6 +72,8 @@ class RAGService:
             
         # --- optional LLM client (Ollama) ---
         llm_client = LLMClient.from_settings(settings)
+        
+        chunker = ChunkerService()
 
         return cls(settings=settings, 
                    embedder=embedder, 
@@ -78,33 +81,63 @@ class RAGService:
                    backend=backend, 
                    doc_store=doc_store if settings.use_mongo else None, 
                    history_store=history_store if settings.use_mongo else None,
-                   llm=llm_client)
+                   llm=llm_client, 
+                   chunker=chunker)
+
 
     def index(self, items: List[Tuple[str, str]]) -> int:
+        """
+        items: list of (doc_id, full_text)
+
+        - Store full docs in Mongo (source of truth)
+        - Chunk docs, embed each chunk, store chunks in Qdrant
+        """
         logger.info("Indexing {} document(s) via {}", len(items), self.backend)
-        
-        # Optional MongoDB document store
+
+        # 1) Store full documents in Mongo
         if self.doc_store is not None:
             self.doc_store.upsert_documents(items)
-        
-        
-        if self.backend == "qdrant":
-            return self.store.index_many(items, embed_func=self.embedder.embed)
-        
-        # dense in-memory
-        for doc_id, text in items:
-            self.store.add(doc_id, text, self.embedder.embed(text))
-        return len(items)
 
-    def search(self, query: str, k: int = 5):
+        # 2) Chunk documents
+        chunk_items: list[tuple[str, str, str]] = []  # (doc_id, chunk_id, chunk_text)
+
+        for doc_id, full_text in items:
+            full_text = (full_text or "").strip()
+            if not full_text:
+                continue
+
+            if self.chunker is None:
+                # fallback: treat the whole doc as one chunk
+                chunk_items.append((doc_id, f"{doc_id}#chunk0", full_text))
+                continue
+
+            pairs = self.chunker.chunk(doc_id, full_text)  # returns (chunk_id, chunk_text)
+            for chunk_id, chunk_text in pairs:
+                chunk_items.append((doc_id, chunk_id, chunk_text))
+
+        if not chunk_items:
+            return 0
+
+        # 3) Index chunk vectors
+        if self.backend == "qdrant":
+            return self.store.index_many(chunk_items, embed_func=self.embedder.embed)
+
+        # Dense backend fallback (if you still support it)
+        for doc_id, chunk_id, chunk_text in chunk_items:
+            vec = self.embedder.embed(chunk_text)
+            self.store.add(chunk_id, chunk_text, vec)
+
+        return len(chunk_items)
+
+    def search(self, query: str, k: int = 3) -> List[Tuple[str, float, str]]:
+        """
+        Returns list of (doc_id, score, text) from vector store.
+        """
         if self.backend == "qdrant":
             return self.store.search(query, k=k, embed_func=self.embedder.embed)
-        
-        
-        # dense in-memory
-        qv = self.embedder.embed(query)
-        return self.store.search(qv, k=k)
-    
+
+        # Dense fallback (if you still support it)
+        return self.store.search(query, k=k, embed_func=self.embedder.embed)
     
     
     def ask(self, question: str, k: int = 3) -> dict:

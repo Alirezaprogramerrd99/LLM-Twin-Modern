@@ -25,3 +25,46 @@ dependencies = [
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+
+[tool.poe.tasks]
+
+# --- API ---
+api = "uvicorn llm_engineering.application.api.main:app --reload --port 8000"
+
+# Same, but without reload (useful when debugging reloader issues)
+api_noreload = "uvicorn llm_engineering.application.api.main:app --port 8000"
+
+# --- Quick smoke tests (HTTP calls) ---
+index_demo = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/index_demo.ps1"
+
+search_demo = "powershell -NoProfile -Command \"Invoke-RestMethod 'http://127.0.0.1:8000/search?q=semantic%20vectors&k=3'\""
+ask_demo = "powershell -NoProfile -Command \"Invoke-RestMethod 'http://127.0.0.1:8000/ask?q=What%20is%20Qdrant%20used%20for%3F&k=2'\""
+history_demo = "powershell -NoProfile -Command \"Invoke-RestMethod 'http://127.0.0.1:8000/history?limit=5'\""
+
+# Runs the small end-to-end flow (assumes API is already running)
+smoke = ["index_demo", "search_demo", "ask_demo", "history_demo"]
+
+# --- Optional: if you use Docker Compose for Mongo/Qdrant ---
+# Change the compose filename if yours differs.
+up = "docker compose up -d"
+down = "docker compose down"
+logs = "docker compose logs -f"
+
+# ---- Infra only (recommended) ----
+infra_up = "docker compose -f docker-compose.infra.yml up -d"
+infra_down = "docker compose -f docker-compose.infra.yml down"
+infra_logs = "docker compose -f docker-compose.infra.yml logs -f"
+
+[dependency-groups]
+dev = [
+    "poethepoet (>=0.38.0,<0.39.0)"
+]
+
+
+# Necessary commands for cleaning up Docker resources and other related tasks.
+
+# docker compose down --volumes --remove-orphans
+# docker rmi llmtwin-api
+# docker rmi -f llmtwin-api
+# docker system prune -f

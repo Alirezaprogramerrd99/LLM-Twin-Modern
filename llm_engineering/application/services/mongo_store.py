@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Tuple
+from typing import Any, Iterable, Union, Dict, Tuple, List, Optional
 from datetime import datetime, timezone
 
 from loguru import logger
@@ -8,37 +8,68 @@ from pymongo import MongoClient, UpdateOne
 
 class MongoDocumentStore:
     """Store raw documents & metadata in MongoDB."""
+    
+
+    DocTuple = Tuple[str, str]                 # (doc_id, text)
+    DocDict = Dict[str, Any]                  # {"id":..., "text":..., "source":...}
+    DocItem = Union[DocTuple, DocDict]
 
     def __init__(self, uri: str, db_name: str, collection_name: str):
         logger.info("Connecting to MongoDB at {}", uri)
         self.client = MongoClient(uri)
         self.collection = self.client[db_name][collection_name]
 
-    def upsert_documents(self, items: List[Tuple[str, str]]) -> int:
+    def upsert_documents(self, items: List[DocItem]) -> int:
         """
-        items: list of (doc_id, text).
+        Accepts either:
+        - (doc_id, text)
+        - {"id": doc_id, "text": text, "source": "...", "title": "...", "url": "...", "tags": [...]}
+
         Uses doc_id as _id so we don't create duplicates on re-index.
         """
         if not items:
             return 0
 
-        # ops is lisf of UpdateOne(write) operations for bulk_write
         ops: list[UpdateOne] = []
         now = datetime.now(timezone.utc)
-        
-        # Prepare bulk upsert operations for each document.
-        for doc_id, text in items:
+
+        for it in items:
+            # --- normalize input ---
+            if isinstance(it, tuple):
+                doc_id, text = it
+                meta = {"source": "manual", "title": None, "url": None, "tags": []}
+            elif isinstance(it, dict):
+                doc_id = it["id"]
+                text = it["text"]
+                meta = {
+                    "source": it.get("source", "manual"),
+                    "title": it.get("title"),
+                    "url": it.get("url"),
+                    "tags": it.get("tags") or [],
+                }
+            else:
+                raise TypeError(f"Unsupported document item type: {type(it)}")
+
+            # --- build update doc ---
+            set_doc = {
+                "text": text,
+                "source": meta["source"],
+                "tags": meta["tags"],
+                "updated_at": now,
+            }
+
+            # only store optional fields if provided
+            if meta["title"] is not None:
+                set_doc["title"] = meta["title"]
+            if meta["url"] is not None:
+                set_doc["url"] = meta["url"]
+
             ops.append(
                 UpdateOne(
                     {"_id": doc_id},
                     {
-                        "$set": { # fields to update
-                            "text": text,
-                            "updated_at": now,
-                        },
-                        "$setOnInsert": { # fields to set only on insert;
-                            "created_at": now,
-                        },
+                        "$set": set_doc,
+                        "$setOnInsert": {"created_at": now},
                     },
                     upsert=True,
                 )
