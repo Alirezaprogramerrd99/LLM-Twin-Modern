@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, HttpUrl
 from typing import List, Tuple
 
 from llm_engineering.application.settings import get_settings, Settings
@@ -7,6 +7,10 @@ from llm_engineering.application.log_setup import setup_logging
 from llm_engineering.application.services.hello_service import HelloService
 from llm_engineering.application.services.rag_service import RAGService
 from fastapi import HTTPException
+from loguru import logger
+
+import hashlib
+from llm_engineering.application.services.web_loader import WebLoaderService
 
 # Configure logging once
 setup_logging()
@@ -119,3 +123,26 @@ def history(
         cleaned.append(d)
         
     return {"count": len(cleaned), "items": cleaned}
+
+# should be added to schemas
+class IngestUrlRequest(BaseModel):
+    url: HttpUrl
+
+
+@app.post("/ingest/url", tags=["ingest"])
+def ingest_url(body: IngestUrlRequest, rag: RAGService = Depends(rag_service_dep)):
+    url = str(body.url)
+
+    loader = WebLoaderService()
+    try:
+        title, text = loader.fetch(url)
+    except Exception as e:
+        # Log full traceback in server logs
+        logger.error("Ingest failed for url='{}': {}\n{}", url, e, traceback.format_exc())
+        # Return readable error to client
+        raise HTTPException(status_code=422, detail=f"Ingest failed: {type(e).__name__}: {e}")
+
+    doc_id = hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
+    indexed = rag.index([(doc_id, text)])
+
+    return {"ok": True, "doc_id": doc_id, "title": title, "indexed_chunks": indexed, "url": url}
