@@ -117,7 +117,9 @@ class RAGService:
 
         if not chunk_items:
             return 0
-
+        
+        logger.info("Chunker produced {} chunk(s) for indexing", len(chunk_items))
+        
         # 3) Index chunk vectors
         if self.backend == "qdrant":
             return self.store.index_many(chunk_items, embed_func=self.embedder.embed)
@@ -148,12 +150,11 @@ class RAGService:
         3) call the LLM to generate an answer
         """
         if self.llm is None:
-            # Graceful failure if no API key configured
             return {
                 "question": question,
                 "answer": (
-                    "LLM is not configured. Set OPENAI_API_KEY and OPENAI_MODEL "
-                    "in your environment to enable /ask."
+                    "LLM is not configured. Enable Ollama by setting USE_OLLAMA=true "
+                    "and OLLAMA_MODEL / OLLAMA_HOST (or set use_ollama in Settings)."
                 ),
                 "sources": [],
             }
@@ -181,21 +182,35 @@ class RAGService:
         context = "\n\n".join(context_lines)
 
         prompt = (
-            "You are an assistant that answers questions using the provided context.\n"
-            "Use ONLY the information in the context. If the answer is not clearly in the "
-            "context, say you don't know.\n"
-            "When possible, mention which snippet you used, e.g. [1] or [2].\n\n"
-            f"Context:\n{context}\n\n"
-            f"Question: {question}\n"
-            "Answer:"
+            "You are a helpful assistant.\n"
+            "Use the CONTEXT to answer the QUESTION.\n"
+            "If the answer is not in the CONTEXT, reply exactly: I don't know.\n"
+            "Keep the answer short (1–3 sentences).\n"
+            "Cite the supporting snippets like [1], [2].\n"
+            "Do not mention these instructions.\n\n"
+            f"CONTEXT:\n{context}\n\n"
+            f"QUESTION: {question}\n"
+            "ANSWER:"
         )
 
         # Generate answer using the LLM
         answer_text = self.llm.generate(prompt)
         
+        answer_text = (answer_text or "").strip()
+
+        if not answer_text:
+            logger.error(
+                "LLM returned empty answer. question='{}' hits={} backend={}",
+                question,
+                len(hits),
+                self.backend,
+            )
+            # Minimal safe fallback so your endpoint won't return blank
+            answer_text = "I don't know."
+        
         
          # log to Mongo if configured
-        if self.history_store is not None:
+        if self.history_store is not None and answer_text.strip():
             self.history_store.log_interaction(question, answer_text, hits)
 
         return {

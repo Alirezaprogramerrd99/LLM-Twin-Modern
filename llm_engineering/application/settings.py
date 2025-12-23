@@ -34,14 +34,14 @@ class Settings(BaseSettings):
 
 
     # --- Services (we’ll wire them later) ---
-    mongo_uri: Optional[str] = None       # keep simple for now
-    qdrant_url: Optional[AnyUrl] = None   # URL gets validated if provided
+    # mongo_uri: Optional[str] = None       # keep simple for now
+    # qdrant_url: Optional[AnyUrl] = None   # URL gets validated if provided
     openai_api_key: Optional[str] = None
     
     
     # --- LLM: Ollama ---
     use_ollama: bool = True
-    ollama_model: str = "qwen3:4b"
+    ollama_model: str = "phi3:latest"
     ollama_host: str = "http://localhost:11434"
 
     # pydantic v2 / pydantic-settings configuration

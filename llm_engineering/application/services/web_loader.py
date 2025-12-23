@@ -82,7 +82,7 @@ class WebLoaderService:
             main = soup.find("main")
             base = main if main else soup.body if soup.body else soup
 
-            raw = base.get_text(separator="\n")
+            raw = base.get_text(separator="\n\n")
 
             # Normalize whitespace
             raw = raw.replace("\r\n", "\n").replace("\r", "\n")
@@ -107,6 +107,9 @@ class WebLoaderService:
             cleaned = "\n".join(lines)
             cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
             text = cleaned
+            
+            print("EXTRACT LEN:", len(text), "DOUBLE-NL COUNT:", text.count("\n\n"))
+
 
             # Title fallback from HTML <title>
             if not title:

@@ -16,10 +16,10 @@ class ChunkerService:
     Returns (chunk_id, chunk_text) pairs.
     """
 
-    target_chars: int = 1200
-    min_chars: int = 400
-    max_chars: int = 1800
-    overlap_blocks: int = 1  # include last N blocks of previous chunk
+    target_chars = 350
+    min_chars    = 120
+    max_chars    = 700
+    overlap_blocks = 1
 
     def chunk(self, doc_id: str, text: str) -> List[Tuple[str, str]]:
         text = self._normalize(text)
@@ -115,25 +115,59 @@ class ChunkerService:
         return text.strip()
 
     def _to_blocks(self, text: str) -> List[str]:
-        # Split into paragraph-like units
-        raw = [b.strip() for b in text.split("\n\n") if b.strip()]
+        text = text.strip()
+        if not text:
+            return []
+
+        # Case A: we already have paragraph breaks
+        if "\n\n" in text:
+            raw_blocks = [b.strip() for b in text.split("\n\n") if b.strip()]
+            blocks: list[str] = []
+            for b in raw_blocks:
+                lines = [ln.strip() for ln in b.split("\n") if ln.strip()]
+                lines = [ln for ln in lines if not self._is_boilerplate_line(ln)]
+                if not lines:
+                    continue
+
+                # keep headings alone
+                if len(lines) == 1 and self._looks_like_heading(lines[0]):
+                    blocks.append(lines[0])
+                else:
+                    blocks.append(" ".join(lines))
+            return blocks
+
+        # Case B: no double-newlines → treat single newlines as structure
+        lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
+        lines = [ln for ln in lines if not self._is_boilerplate_line(ln)]
+        if not lines:
+            return []
 
         blocks: list[str] = []
-        for b in raw:
-            # split overly liney blocks (common in scraped pages)
-            lines = [ln.strip() for ln in b.split("\n") if ln.strip()]
-            # remove obvious boilerplate-ish lines
-            lines = [ln for ln in lines if not self._is_boilerplate_line(ln)]
+        current: list[str] = []
 
-            if not lines:
+        def flush():
+            nonlocal current
+            if current:
+                blocks.append(" ".join(current).strip())
+                current = []
+
+        for ln in lines:
+            # headings become their own block boundary
+            if self._looks_like_heading(ln) and len(ln) <= 120:
+                flush()
+                blocks.append(ln)
                 continue
 
-            # If it looks like a heading line by itself, keep it as its own block
-            if len(lines) == 1 and self._looks_like_heading(lines[0]):
-                blocks.append(lines[0])
-            else:
-                blocks.append(" ".join(lines))
+            current.append(ln)
+
+            # flush once the block is "big enough"
+            if sum(len(x) for x in current) >= 300:
+                flush()
+
+        flush()
         return blocks
+
+
 
     def _is_boilerplate_line(self, line: str) -> bool:
         l = line.lower()

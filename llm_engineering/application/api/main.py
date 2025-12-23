@@ -91,16 +91,41 @@ def debug_mongo(rag: RAGService = Depends(rag_service_dep)):
 # Returns: { "answer": "...", "sources": [ ... ] }
 # tags=["rag"] puts this endpoint in the "rag" group in the Swagger UI
 # ... means that the parameter is required.
+from fastapi import HTTPException, Depends, Query
+from loguru import logger
+import traceback
+
 @app.get("/ask", tags=["rag"])
 def ask(
     q: str = Query(..., description="User question"),
     k: int = Query(3, ge=1, le=10),
     rag: RAGService = Depends(rag_service_dep),
 ):
-    # calling the RAG pipeline's ask method
-    result = rag.ask(q, k=k)
+    try:
+        result = rag.ask(q, k=k)
+    except Exception as e:
+        logger.error("RAGService.ask crashed: {}\n{}", e, traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"RAGService.ask crashed: {type(e).__name__}: {e}")
+
     if not result:
         raise HTTPException(status_code=500, detail="RAGService.ask returned no result")
+
+    # --- fail loudly if answer is missing/empty ---
+    if isinstance(result, dict):
+        answer = result.get("answer")
+        if answer is None:
+            raise HTTPException(status_code=500, detail="RAGService.ask result missing 'answer' key")
+        if not str(answer).strip():
+            # include a tiny hint about retrieval to speed debugging
+            srcs = result.get("sources") or []
+            raise HTTPException(
+                status_code=500,
+                detail=f"RAGService.ask produced empty answer (sources={len(srcs)}). Check Ollama/model call.",
+            )
+    else:
+        # if you ever change rag.ask to return a non-dict, make it explicit
+        raise HTTPException(status_code=500, detail=f"RAGService.ask returned unexpected type: {type(result)}")
+
     return result
 
 
@@ -146,3 +171,20 @@ def ingest_url(body: IngestUrlRequest, rag: RAGService = Depends(rag_service_dep
     indexed = rag.index([(doc_id, text)])
 
     return {"ok": True, "doc_id": doc_id, "title": title, "indexed_chunks": indexed, "url": url}
+
+
+@app.get("/debug/extract", tags=["debug"])
+def debug_extract(url: str):
+    loader = WebLoaderService()
+    try:
+        title, text = loader.fetch(url)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"{type(e).__name__}: {e}")
+
+    return {
+        "title": title,
+        "len": len(text),
+        "double_newlines": text.count("\n\n"),
+        "single_newlines": text.count("\n"),
+        "preview": text[:800],
+    }
